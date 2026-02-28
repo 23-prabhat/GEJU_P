@@ -32,9 +32,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default SyedBasheer;
-HULK 
-IRONMAN
-VIBECODERS ARE GAY
-COLLEGE HAS NO POTENTIAL
-JUST DROPOUT OF HERE
+export default nextConfig;

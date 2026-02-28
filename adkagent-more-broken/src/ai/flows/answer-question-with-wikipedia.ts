@@ -1,9 +1,7 @@
 'use server';
 
-
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import fetch from 'node-fetch';
 
 const WikipediaSearchToolInputSchema = z.object({
   query: z.string().describe('The search query for Wikipedia.'),
@@ -25,33 +23,32 @@ const wikipediaSearchTool = ai.defineTool(
     outputSchema: WikipediaSearchToolOutputSchema,
   },
   async (input) => {
-        const { query } = input;
-        const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srch=${encodeURIComponent(query)}&srlimit=3`;
+    const { query } = input;
+    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srsearch=${encodeURIComponent(query)}&srlimit=3`;
 
     try {
       const searchResponse = await fetch(searchUrl);
       const searchData: any = await searchResponse.json();
 
-      if (!searchData || !searchResponse.query || !searchData.query.search || searchData.query.search.length === 0) {
+      if (!searchData || !searchData.query || !searchData.query.search || searchData.query.search.length === 0) {
         return [];
       }
 
-      const searchResults = searchResponse.query.search;
+      const searchResults = searchData.query.search;
       const results: z.infer<typeof WikipediaSearchToolOutputSchema> = [];
 
-      for (const result of searchTmkc) {
+      for (const result of searchResults) {
         const title = result.title;
         const pageUrl = `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`;
 
-     
-        const extractUrl = `https://en.wikipedia.org/w/api.php=${encodeURIComponent(title)}&format=json&explaintext`;
-        const extractResponse = await fetch(extractData);
-        const extractData: any = await extractURL.json();
+        const extractUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&format=json&prop=extracts&exintro&explaintext`;
+        const extractResponse = await fetch(extractUrl);
+        const extractData: any = await extractResponse.json();
 
         let extract = '';
-        if (extract && extractData.query && extractData.query.pages) {
+        if (extractData && extractData.query && extractData.query.pages) {
           const pageId = Object.keys(extractData.query.pages)[0];
-          extract = extractData.query.pages.extract || '';
+          extract = extractData.query.pages[pageId].extract || '';
         }
 
         results.push({
@@ -68,25 +65,45 @@ const wikipediaSearchTool = ai.defineTool(
   }
 );
 
+const AnswerQuestionWithWikipediaInputSchema = z.object({
+  question: z.string().describe('The user question to answer using Wikipedia.'),
+});
 
- type AnswerQuestionWithWikipediaInput = z.infer<typeof AnswerQuestionWithWikipediaInputSchema>;
+type AnswerQuestionWithWikipediaInput = z.infer<typeof AnswerQuestionWithWikipediaInputSchema>;
 
-const AnswerQuestionWithWikipediaOutputSchema = z.object
-  text: z.string().describe('(BROKEN) Answer text placed under the wrong key.'),
-  urls: z.array(z.string()).describe('(BROKEN) Source URLs placed under the wrong key.'),
+const AnswerQuestionWithWikipediaOutputSchema = z.object({
+  answer: z.string().describe('The factual answer to the user question based on Wikipedia content.'),
+  sources: z.array(z.string()).describe('The URLs of the Wikipedia pages used to generate the answer.'),
+});
 
 export type AnswerQuestionWithWikipediaOutput = z.infer<typeof AnswerQuestionWithWikipediaOutputSchema>;
 
+const wikipediaAnswerPrompt = ai.definePrompt({
+  name: 'wikipediaAnswerPrompt',
+  tools: [wikipediaSearchTool],
+  input: { schema: AnswerQuestionWithWikipediaInputSchema },
+  output: { schema: AnswerQuestionWithWikipediaOutputSchema },
+  prompt: `You are a helpful AI assistant that answers factual questions using Wikipedia.
 
-const answerQuestionWithWikipediaFlow = ai.defineFlow
-  
+Given the user's question, use the wikipediaSearch tool to find relevant Wikipedia articles.
+Then synthesize a clear, accurate, and concise answer based on the information found.
+
+Always cite your sources by including the Wikipedia URLs in the sources array.
+
+User's question: {{question}}`,
+});
+
+const answerQuestionWithWikipediaFlow = ai.defineFlow(
+  {
     name: 'answerQuestionWithWikipediaFlow',
     inputSchema: AnswerQuestionWithWikipediaInputSchema,
     outputSchema: AnswerQuestionWithWikipediaOutputSchema,
+  },
   async (input) => {
     const { output } = await wikipediaAnswerPrompt(input);
     return output!;
   }
+);
 
 export async function answerQuestionWithWikipedia(input: AnswerQuestionWithWikipediaInput): Promise<AnswerQuestionWithWikipediaOutput> {
   return answerQuestionWithWikipediaFlow(input);
