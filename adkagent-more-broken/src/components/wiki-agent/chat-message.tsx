@@ -1,9 +1,11 @@
-﻿import React from 'react';
+﻿import React, { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { ExternalLink, User, Bot, Globe } from 'lucide-react';
+import { ExternalLink, User, Bot, Globe, Copy, Check } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export type MessageRole = 'user' | 'assistant';
 
@@ -20,6 +22,13 @@ interface ChatMessageProps {
 
 export function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === 'user';
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(message.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div className={cn('flex gap-3', isUser ? 'justify-end' : 'justify-start')}>
@@ -39,10 +48,29 @@ export function ChatMessage({ message }: ChatMessageProps) {
         </span>
 
         <Card className={cn(
-          'p-3 text-sm leading-relaxed shadow-sm',
+          'p-3 text-sm leading-relaxed shadow-sm group relative',
           isUser ? 'bg-primary text-white border-primary' : 'bg-card text-foreground'
         )}>
           {message.content}
+          {!isUser && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={handleCopy}
+                >
+                  {copied ? (
+                    <Check className="h-3 w-3 text-green-500" />
+                  ) : (
+                    <Copy className="h-3 w-3 text-muted-foreground" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{copied ? 'Copied!' : 'Copy to clipboard'}</TooltipContent>
+            </Tooltip>
+          )}
         </Card>
 
         {/* Source links */}
