@@ -1,9 +1,12 @@
-﻿import React from 'react';
+﻿import React, { useState, useCallback, useRef } from 'react';
 import { cn } from '@/lib/utils';
-import { ExternalLink, User, Bot, Globe } from 'lucide-react';
+import { User, Bot, Copy, Check, Volume2, Square } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { WikiPreviewCard } from './wiki-preview-card';
 
 export type MessageRole = 'user' | 'assistant';
 
@@ -16,10 +19,35 @@ export interface Message {
 
 interface ChatMessageProps {
   message: Message;
+  isStreaming?: boolean;
 }
 
-export function ChatMessage({ message }: ChatMessageProps) {
+export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
   const isUser = message.role === 'user';
+  const [copied, setCopied] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(message.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleReadAloud = useCallback(() => {
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(message.content);
+    utterance.rate = 1;
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    utteranceRef.current = utterance;
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  }, [isSpeaking, message.content]);
 
   return (
     <div className={cn('flex gap-3', isUser ? 'justify-end' : 'justify-start')}>
@@ -39,30 +67,61 @@ export function ChatMessage({ message }: ChatMessageProps) {
         </span>
 
         <Card className={cn(
-          'p-3 text-sm leading-relaxed shadow-sm',
+          'p-3 text-sm leading-relaxed shadow-sm group relative',
           isUser ? 'bg-primary text-white border-primary' : 'bg-card text-foreground'
         )}>
           {message.content}
+          {isStreaming && (
+            <span className="inline-block w-1.5 h-4 ml-0.5 bg-primary animate-pulse rounded-sm align-text-bottom" />
+          )}
+          {!isUser && (
+            <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={handleReadAloud}
+                  >
+                    {isSpeaking ? (
+                      <Square className="h-3 w-3 text-red-500" />
+                    ) : (
+                      <Volume2 className="h-3 w-3 text-muted-foreground" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{isSpeaking ? 'Stop reading' : 'Read aloud'}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={handleCopy}
+                  >
+                    {copied ? (
+                      <Check className="h-3 w-3 text-green-500" />
+                    ) : (
+                      <Copy className="h-3 w-3 text-muted-foreground" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{copied ? 'Copied!' : 'Copy to clipboard'}</TooltipContent>
+              </Tooltip>
+            </div>
+          )}
         </Card>
 
-        {/* Source links */}
+        {/* Source preview cards */}
         {message.sources && message.sources.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-1">
-            <Badge variant="outline" className="text-[10px] px-2 py-0">
+          <div className="flex flex-col gap-2 mt-2 w-full">
+            <Badge variant="outline" className="text-[10px] px-2 py-0 w-fit">
               {message.sources.length} source{message.sources.length > 1 ? 's' : ''}
             </Badge>
             {message.sources.map((source, idx) => (
-              <a
-                key={idx}
-                href={source}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-secondary text-primary hover:bg-primary/10 transition-colors border border-primary/20"
-              >
-                <Globe className="h-3 w-3" />
-                Reference {idx + 1}
-                <ExternalLink className="h-2.5 w-2.5 opacity-60" />
-              </a>
+              <WikiPreviewCard key={idx} url={source} />
             ))}
           </div>
         )}
