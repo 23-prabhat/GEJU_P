@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Send, Loader2, Trash2, Bot } from 'lucide-react';
+import { Send, Loader2, Trash2, Bot, Mic, MicOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface ChatContainerProps {
@@ -22,8 +22,44 @@ export function ChatContainer({ suggestions }: ChatContainerProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  const toggleVoiceInput = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast({ title: 'Unsupported', description: 'Your browser does not support speech recognition.' });
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setInput((prev) => (prev ? prev + ' ' + transcript : transcript));
+    };
+    recognition.onerror = () => {
+      setIsListening(false);
+      toast({ title: 'Error', description: 'Speech recognition failed. Please try again.' });
+    };
+    recognition.onend = () => setIsListening(false);
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -165,6 +201,20 @@ export function ChatContainer({ suggestions }: ChatContainerProps) {
                 }
               }}
             />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant={isListening ? 'destructive' : 'outline'}
+                  size="icon"
+                  onClick={toggleVoiceInput}
+                  disabled={isLoading}
+                >
+                  {isListening ? <MicOff className="h-4 w-4 animate-pulse" /> : <Mic className="h-4 w-4" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{isListening ? 'Stop listening' : 'Voice input'}</TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button type="submit" disabled={isLoading || !input.trim()} size="icon">
