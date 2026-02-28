@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Send, Loader2, Trash2, Bot, Mic, MicOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -118,7 +119,7 @@ export function ChatContainer({ suggestions }: ChatContainerProps) {
         {/* Header */}
         <CardHeader className="flex flex-row items-center justify-between py-3 px-4">
           <div className="flex items-center gap-2">
-            <Bot className="h-5 w-5 text-primary" />
+            <Bot className={`h-5 w-5 text-primary transition-all ${isLoading ? 'animate-pulse' : ''}`} />
             <CardTitle className="text-base font-semibold">Chat</CardTitle>
             <Badge variant="secondary" className="text-[10px]">
               {messages.filter((m) => m.role === 'user').length} questions
@@ -167,13 +168,23 @@ export function ChatContainer({ suggestions }: ChatContainerProps) {
                 ))}
                 {isLoading && (
                   <div className="flex gap-3 items-start">
+                    <Avatar className="h-8 w-8 mt-1 shrink-0 animate-pulse ring-2 ring-primary/40 ring-offset-2 ring-offset-background">
+                      <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                        <Bot className="h-4 w-4 animate-bounce" />
+                      </AvatarFallback>
+                    </Avatar>
                     <div className="flex flex-col gap-2 max-w-[85%]">
-                      <Skeleton className="h-4 w-64" />
-                      <Skeleton className="h-4 w-48" />
-                      <Skeleton className="h-4 w-56" />
-                      <div className="flex items-center gap-2 text-muted-foreground mt-1">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        <span className="text-xs">Searching Wikipedia...</span>
+                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide px-1">WikiAgent</span>
+                      <div className="rounded-lg bg-card border p-3 shadow-sm">
+                        <div className="flex flex-col gap-2">
+                          <Skeleton className="h-4 w-64" />
+                          <Skeleton className="h-4 w-48" />
+                          <Skeleton className="h-4 w-56" />
+                        </div>
+                        <div className="flex items-center gap-2 text-muted-foreground mt-2">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span className="text-xs">Searching Wikipedia...</span>
+                        </div>
                       </div>
                     </div>
                   </div>
