@@ -1,11 +1,12 @@
 ﻿import React, { useState, useCallback, useRef } from 'react';
 import { cn } from '@/lib/utils';
-import { ExternalLink, User, Bot, Globe, Copy, Check, Volume2, Square } from 'lucide-react';
+import { User, Bot, Copy, Check, Volume2, Square } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { WikiPreviewCard } from './wiki-preview-card';
 
 export type MessageRole = 'user' | 'assistant';
 
@@ -109,24 +110,14 @@ export function ChatMessage({ message }: ChatMessageProps) {
           )}
         </Card>
 
-        {/* Source links */}
+        {/* Source preview cards */}
         {message.sources && message.sources.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-1">
-            <Badge variant="outline" className="text-[10px] px-2 py-0">
+          <div className="flex flex-col gap-2 mt-2 w-full">
+            <Badge variant="outline" className="text-[10px] px-2 py-0 w-fit">
               {message.sources.length} source{message.sources.length > 1 ? 's' : ''}
             </Badge>
             {message.sources.map((source, idx) => (
-              <a
-                key={idx}
-                href={source}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-secondary text-primary hover:bg-primary/10 transition-colors border border-primary/20"
-              >
-                <Globe className="h-3 w-3" />
-                Reference {idx + 1}
-                <ExternalLink className="h-2.5 w-2.5 opacity-60" />
-              </a>
+              <WikiPreviewCard key={idx} url={source} />
             ))}
           </div>
         )}
