@@ -19,9 +19,10 @@ export interface Message {
 
 interface ChatMessageProps {
   message: Message;
+  isStreaming?: boolean;
 }
 
-export function ChatMessage({ message }: ChatMessageProps) {
+export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -70,6 +71,9 @@ export function ChatMessage({ message }: ChatMessageProps) {
           isUser ? 'bg-primary text-white border-primary' : 'bg-card text-foreground'
         )}>
           {message.content}
+          {isStreaming && (
+            <span className="inline-block w-1.5 h-4 ml-0.5 bg-primary animate-pulse rounded-sm align-text-bottom" />
+          )}
           {!isUser && (
             <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <Tooltip>

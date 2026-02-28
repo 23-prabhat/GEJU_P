@@ -1,8 +1,7 @@
 ﻿'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ChatMessage, type Message } from './chat-message';
-import { answerQuestionWithWikipedia } from '@/ai/flows/answer-question-with-wikipedia';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -73,7 +72,7 @@ export function ChatContainer({ suggestions }: ChatContainerProps) {
     toast({ title: 'Chat cleared', description: 'Conversation history has been removed.' });
   };
 
-  const submitQuestion = async (question: string) => {
+  const submitQuestion = useCallback(async (question: string) => {
     if (!question.trim() || isLoading) return;
 
     const userMessage: Message = {
@@ -82,31 +81,89 @@ export function ChatContainer({ suggestions }: ChatContainerProps) {
       content: question.trim(),
     };
 
+    const assistantId = (Date.now() + 1).toString();
+
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
 
+    // Add an empty assistant message that we'll stream into
+    setMessages((prev) => [
+      ...prev,
+      { id: assistantId, role: 'assistant', content: '', sources: [] },
+    ]);
+
     try {
-      const result = await answerQuestionWithWikipedia({ question: question.trim() });
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: result.answer,
-        sources: result.sources,
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: question.trim() }),
+      });
+
+      if (!res.ok || !res.body) throw new Error('Stream failed');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr) continue;
+
+          try {
+            const event = JSON.parse(jsonStr);
+
+            if (event.type === 'sources') {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId ? { ...m, sources: event.sources } : m
+                )
+              );
+            } else if (event.type === 'token') {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, content: m.content + event.text }
+                    : m
+                )
+              );
+            } else if (event.type === 'error') {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, content: 'Sorry, I encountered an error while searching Wikipedia. Please try again.' }
+                    : m
+                )
+              );
+              toast({ title: 'Error', description: event.message });
+            }
+          } catch {
+            // skip malformed JSON
+          }
+        }
+      }
     } catch (error) {
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'Sorry, I encountered an error while searching Wikipedia. Please try again.',
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? { ...m, content: m.content || 'Sorry, I encountered an error while searching Wikipedia. Please try again.' }
+            : m
+        )
+      );
       toast({ title: 'Error', description: 'Failed to fetch answer. Please try again.' });
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isLoading, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,32 +220,44 @@ export function ChatContainer({ suggestions }: ChatContainerProps) {
               </div>
             ) : (
               <div className="space-y-4">
-                {messages.map((message) => (
-                  <ChatMessage key={message.id} message={message} />
-                ))}
-                {isLoading && (
-                  <div className="flex gap-3 items-start">
-                    <Avatar className="h-8 w-8 mt-1 shrink-0 animate-pulse ring-2 ring-primary/40 ring-offset-2 ring-offset-background">
-                      <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                        <Bot className="h-4 w-4 animate-bounce" />
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col gap-2 max-w-[85%]">
-                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide px-1">WikiAgent</span>
-                      <div className="rounded-lg bg-card border p-3 shadow-sm">
-                        <div className="flex flex-col gap-2">
-                          <Skeleton className="h-4 w-64" />
-                          <Skeleton className="h-4 w-48" />
-                          <Skeleton className="h-4 w-56" />
-                        </div>
-                        <div className="flex items-center gap-2 text-muted-foreground mt-2">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          <span className="text-xs">Searching Wikipedia...</span>
+                {messages.map((message) => {
+                  // Don't render the streaming message if it has no content yet (skeleton handles it)
+                  if (isLoading && message === messages[messages.length - 1] && !message.content) {
+                    return null;
+                  }
+                  const streaming = isLoading && message === messages[messages.length - 1] && message.role === 'assistant';
+                  return <ChatMessage key={message.id} message={message} isStreaming={streaming} />;
+                })}
+                {isLoading && (() => {
+                  const lastMsg = messages[messages.length - 1];
+                  // Show skeleton only while waiting for first token
+                  if (lastMsg?.role === 'assistant' && !lastMsg.content) {
+                    return (
+                      <div className="flex gap-3 items-start">
+                        <Avatar className="h-8 w-8 mt-1 shrink-0 animate-pulse ring-2 ring-primary/40 ring-offset-2 ring-offset-background">
+                          <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                            <Bot className="h-4 w-4 animate-bounce" />
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col gap-2 max-w-[85%]">
+                          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide px-1">WikiAgent</span>
+                          <div className="rounded-lg bg-card border p-3 shadow-sm">
+                            <div className="flex flex-col gap-2">
+                              <Skeleton className="h-4 w-64" />
+                              <Skeleton className="h-4 w-48" />
+                              <Skeleton className="h-4 w-56" />
+                            </div>
+                            <div className="flex items-center gap-2 text-muted-foreground mt-2">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              <span className="text-xs">Searching Wikipedia...</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                )}
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             )}
           </ScrollArea>
