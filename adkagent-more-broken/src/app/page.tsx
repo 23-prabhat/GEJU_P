@@ -21,22 +21,15 @@ export default function Home() {
 
         <Separator className="mb-6" />
 
-        {/* Suggestion chips */}
-        <div className="flex flex-wrap justify-center gap-2 mb-6">
-          {[
+        {/* Chat */}
+        <ChatContainer
+          suggestions={[
             'What is quantum computing?',
             'History of the Internet',
             'How does photosynthesis work?',
             'Who invented the telephone?',
-          ].map((q) => (
-            <Badge key={q} variant="outline" className="cursor-default text-xs py-1 px-3">
-              {q}
-            </Badge>
-          ))}
-        </div>
-
-        {/* Chat */}
-        <ChatContainer />
+          ]}
+        />
 
         {/* Footer */}
         <div className="text-center mt-6">

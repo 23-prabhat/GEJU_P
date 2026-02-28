@@ -14,7 +14,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Send, Loader2, Trash2, Bot } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-export function ChatContainer() {
+interface ChatContainerProps {
+  suggestions?: string[];
+}
+
+export function ChatContainer({ suggestions }: ChatContainerProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -32,14 +36,13 @@ export function ChatContainer() {
     toast({ title: 'Chat cleared', description: 'Conversation history has been removed.' });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
+  const submitQuestion = async (question: string) => {
+    if (!question.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: input.trim(),
+      content: question.trim(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -47,7 +50,7 @@ export function ChatContainer() {
     setIsLoading(true);
 
     try {
-      const result = await answerQuestionWithWikipedia({ question: input.trim() });
+      const result = await answerQuestionWithWikipedia({ question: question.trim() });
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -66,6 +69,11 @@ export function ChatContainer() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitQuestion(input);
   };
 
   return (
@@ -101,6 +109,20 @@ export function ChatContainer() {
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 py-16">
                 <Bot className="h-12 w-12 opacity-30" />
                 <p className="text-sm">Ask a question to get started!</p>
+                {suggestions && suggestions.length > 0 && (
+                  <div className="flex flex-wrap justify-center gap-2 mt-3">
+                    {suggestions.map((q) => (
+                      <Badge
+                        key={q}
+                        variant="outline"
+                        className="cursor-pointer text-xs py-1 px-3 hover:bg-primary/10 transition-colors"
+                        onClick={() => submitQuestion(q)}
+                      >
+                        {q}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
